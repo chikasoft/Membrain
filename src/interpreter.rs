@@ -1,3 +1,5 @@
+use std::fs::File;
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Instruction {
     MoveRight,
@@ -10,20 +12,27 @@ pub enum Instruction {
     JumpUnlessZero(usize),
 }
 
+pub enum ReadSource {
+    StdIn,
+    File(File),
+}
+
 pub struct Interpreter {
     pc: usize,
     pointer: usize,
     tape: Vec<u8>,
     instructions: Vec<Instruction>,
+    read_source: ReadSource,
 }
 
 impl Interpreter {
-    pub fn new(instructions: Vec<Instruction>) -> Self {
+    pub fn new(instructions: Vec<Instruction>, read_source: ReadSource) -> Self {
         Interpreter {
             pc: 0,
             pointer: 0,
             tape: vec![0; 30_000],
             instructions,
+            read_source,
         }
     }
 
@@ -61,13 +70,23 @@ impl Interpreter {
                 Instruction::Read => {
                     use std::io::{stdin, Read};
 
-                    let cell = self.get_current_cell_mut();
                     let mut input = [0u8];
 
-                    *cell = match stdin().read_exact(&mut input) {
-                        Ok(_) => input[0],
-                        Err(_) => 0,
-                    };
+                    match &mut self.read_source {
+                        ReadSource::StdIn => {
+                            if let Err(_) = stdin().read_exact(&mut input) {
+                                input = [0];
+                            }
+                        }
+                        ReadSource::File(file) => {
+                            if let Err(_) = file.read_exact(&mut input) {
+                                input = [0];
+                            }
+                        }
+                    }
+
+                    let cell = self.get_current_cell_mut();
+                    *cell = input[0];
                 }
                 Instruction::JumpIfZero(matching) => {
                     let cell = self.get_current_cell_value();

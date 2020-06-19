@@ -1,12 +1,14 @@
 extern crate clap;
 
+use std::fs::File;
+
 use clap::{App, Arg};
 
 mod interpreter;
 mod language;
 mod optimizer;
 
-use interpreter::Interpreter;
+use interpreter::{Interpreter, ReadSource};
 use language::parse_bf_file;
 use optimizer::optimize_instructions;
 
@@ -22,6 +24,13 @@ fn main() {
                 .about("Optimize Brainfuck before interpreting."),
         )
         .arg(
+            Arg::new("read")
+                .short('r')
+                .long("read")
+                .takes_value(true)
+                .about("Get user-input from a file instead of stdin."),
+        )
+        .arg(
             Arg::new("INPUT")
                 .required(true)
                 .takes_value(true)
@@ -35,11 +44,23 @@ fn main() {
 
     match parse_bf_file(input_file) {
         Ok(mut instructions) => {
+            let read_source = if let Some(read_file) = matches.value_of("read") {
+                match File::open(read_file) {
+                    Ok(f) => ReadSource::File(f),
+                    Err(err) => {
+                        println!("User-input file source does not exist: {}", err.to_string());
+                        return;
+                    }
+                }
+            } else {
+                ReadSource::StdIn
+            };
+
             if matches.occurrences_of("optimize") > 0 {
                 instructions = optimize_instructions(instructions);
             }
 
-            Interpreter::new(instructions).run();
+            Interpreter::new(instructions, read_source).run();
         }
         Err(err) => println!("Failed to parse Brainfuck file: {}", err),
     }
